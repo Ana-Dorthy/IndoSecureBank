@@ -1,0 +1,46 @@
+# Test Report API Endpoints
+
+### 1. Submit a Report Request
+POST http://localhost:5000/api/reports/request
+Content-Type: application/json
+Authorization: Bearer demo-token
+X-Banking-System-ID: banking-system-001
+
+{
+  "reportType": "customer",
+  "period": "weekly",
+  "filters": {
+    "bankId": "",
+    "branchId": "",
+    "startDate": "2025-01-09",
+    "endDate": "2025-01-16"
+  },
+  "requestedBy": "admin",
+  "requestId": "REQ_TEST_123456",
+  "timestamp": "2025-01-09T16:25:47.210Z",
+  "bankingSystemUrl": "http://localhost:5000/api"
+}
+
+### 2. Get Report Status
+GET http://localhost:5000/api/reports/status/REQ_TEST_123456
+
+### 3. Get All Report Requests
+GET http://localhost:5000/api/reports/requests
+
+### 4. Test Bank Report Request
+POST http://localhost:5000/api/reports/request
+Content-Type: application/json
+
+{
+  "reportType": "bank",
+  "period": "monthly",
+  "filters": {
+    "bankId": "some-bank-id",
+    "startDate": "2025-01-01",
+    "endDate": "2025-01-31"
+  },
+  "requestedBy": "admin",
+  "requestId": "REQ_BANK_789",
+  "timestamp": "2025-01-09T16:30:00.000Z",
+  "bankingSystemUrl": "http://localhost:5000/api"
+}
