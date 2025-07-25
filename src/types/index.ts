@@ -116,3 +116,65 @@ export interface BankingOperation {
   category: 'transaction' | 'account' | 'statement';
   requiredFields: string[];
 }
+export interface User {
+  id: string;
+  name: string;
+  email: string;
+  role: 'customer' | 'loan_officer';
+  phone?: string;
+  address?: string;
+  monthlyIncome?: number;
+  creditScore?: number;
+  employmentType?: 'salaried' | 'self_employed' | 'business';
+  yearsOfEmployment?: number;
+}
+
+export interface LoanProduct {
+  id: string;
+  name: string;
+  type: 'personal' | 'home' | 'car' | 'business';
+  minAmount: number;
+  maxAmount: number;
+  interestRate: number;
+  tenure: number; // in months
+  processingFee: number;
+  eligibilityCriteria: {
+    minIncome: number;
+    minCreditScore: number;
+    maxAge: number;
+    minAge: number;
+    employmentTypes: string[];
+  };
+  features: string[];
+  documents: string[];
+}
+
+export interface LoanApplication {
+  id: string;
+  customerId: string;
+  customerName: string;
+  customerEmail: string;
+  loanProductId: string;
+  loanProductName: string;
+  requestedAmount: number;
+  tenure: number;
+  monthlyIncome: number;
+  employmentType: string;
+  purpose: string;
+  status: 'pending' | 'approved' | 'rejected' | 'under_review';
+  appliedDate: string;
+  processedBy?: string;
+  documents: {
+    name: string;
+    uploaded: boolean;
+  }[];
+  remarks?: string;
+}
+
+export interface EligibilityResult {
+  eligible: boolean;
+  maxLoanAmount: number;
+  suggestedTenure: number;
+  monthlyEMI: number;
+  reasons?: string[];
+}

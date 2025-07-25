@@ -21,9 +21,12 @@ import {
   Briefcase,
   Home,
   Car,
-  GraduationCap
+  GraduationCap,
+  Clock
 } from 'lucide-react';
 import { Customer, Account, Transaction, Bank, Branch, KYC } from '../types';
+import LoanEligibility from './LoanEligibility';
+import LoanApplicationForm from './LoanApplicationForm';
 
 interface CustomerPortalProps {
   customer: Customer;
@@ -53,14 +56,6 @@ interface LoanType {
   features: string[];
 }
 
-interface LoanApplication {
-  loanTypeId: string;
-  amount: number;
-  purpose: string;
-  employmentType: 'salaried' | 'self_employed' | 'business';
-  monthlyIncome: number;
-}
-
 export default function CustomerPortal({ 
   customer, 
   accounts, 
@@ -81,15 +76,12 @@ export default function CustomerPortal({
   const [toAccount, setToAccount] = useState<string>('');
   const [withdrawEligibility, setWithdrawEligibility] = useState<{ eligible: boolean; message: string } | null>(null);
   const [showDebugInfo, setShowDebugInfo] = useState(false);
-  const [selectedLoanType, setSelectedLoanType] = useState<string>('');
-  const [showLoanApplication, setShowLoanApplication] = useState(false);
-  const [loanApplication, setLoanApplication] = useState<LoanApplication>({
-    loanTypeId: '',
-    amount: 0,
-    purpose: '',
-    employmentType: 'salaried',
-    monthlyIncome: 0
-  });
+  const [activesTab, setActivesTab] = useState<'eligibility' | 'apply' | 'status'>('eligibility');
+  const [applications, setApplications] = useState<any[]>([]);
+const [loadingApplications, setLoadingApplications] = useState(true);
+  // Get applications using customer.id instead of user?.id
+  // const applications = JSON.parse(localStorage.getItem('loan_applications') || '[]')
+  //   .filter((app: any) => app.customerId === customer.id);
 
   // Mock customer credit profile - in real app this would come from credit bureau
   const customerCreditProfile = {
@@ -97,6 +89,15 @@ export default function CustomerPortal({
     annualIncome: 600000, // Mock annual income (6 lakhs)
     hasExistingLoans: false,
     creditHistory: 'good'
+  };
+ 
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved': return 'text-green-600 bg-green-100';
+      case 'rejected': return 'text-red-600 bg-red-100';
+      case 'under_review': return 'text-yellow-600 bg-yellow-100';
+      default: return 'text-blue-600 bg-blue-100';
+    }
   };
 
   const customerAccounts = accounts.filter(acc => acc.customerId === customer.id);
@@ -127,6 +128,7 @@ export default function CustomerPortal({
   // Check if customer has business accounts (current accounts are typically business)
   const hasBusinessAccount = validCustomerAccounts.some(acc => acc.accountType === 'current');
   const accountTypes = [...new Set(validCustomerAccounts.map(acc => acc.accountType))];
+  
   // Define loan types based on account type and eligibility
   const loanTypes: LoanType[] = [
     {
@@ -299,55 +301,62 @@ export default function CustomerPortal({
     }
   };
 
-  // const handleLoanApplication = (e: React.FormEvent) => {
-  //   e.preventDefault();
-  //   const loanType = loanTypes.find(lt => lt.id === loanApplication.loanTypeId);
-  //   alert(`Loan application submitted!\n\nLoan Type: ${loanType?.name}\nAmount: ₹${loanApplication.amount.toLocaleString()}\nPurpose: ${loanApplication.purpose}\n\nOur team will contact you within 2-3 business days.`);
-  //   setShowLoanApplication(false);
-  //   setLoanApplication({
-  //     loanTypeId: '',
-  //     amount: 0,
-  //     purpose: '',
-  //     employmentType: 'salaried',
-  //     monthlyIncome: 0
-  //   });
-  // };
   const handleLoanApplication = async (e: React.FormEvent) => {
-  e.preventDefault();
-  const loanData = {
-    customerId: customer.id,
-    loanType: 'home', // Or pick from UI
-    amount: parseFloat(amount),
-    tenure: 36,
-    interestRate: 9.5,
-    details: {
-      reason: description
+    e.preventDefault();
+    const loanData = {
+      customerId: customer.id, // Using customer.id instead of user?.id
+      loanType: 'home', // Or pick from UI
+      amount: parseFloat(amount),
+      tenure: 36,
+      interestRate: 9.5,
+      details: {
+        reason: description
+      }
+    };
+
+    const res = await fetch('http://localhost:5000/api/loans', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(loanData)
+    });
+
+    if (res.ok) {
+      alert('Loan application submitted!');
+      setAmount('');
+      setDescription('');
+    } else {
+      alert('Failed to apply for loan');
     }
   };
-
-  const res = await fetch('http://localhost:5000/api/loans', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(loanData)
-  });
-
-  if (res.ok) {
-    alert('Loan application submitted!');
-    setAmount('');
-    setDescription('');
-  } else {
-    alert('Failed to apply for loan');
-  }
-};
-
 
   const tabs = [
     { id: 'overview' as const, label: 'Account Overview', icon: User },
     { id: 'credit-debit' as const, label: 'Credit/Debit', icon: CreditCard },
     { id: 'transfer' as const, label: 'Transfer', icon: ArrowUpDown },
     { id: 'loans' as const, label: 'Loans', icon: PiggyBank },
-    { id: 'statement' as const, label: 'Statement', icon: Receipt }
+    { id: 'statement' as const, label: 'Statement', icon: Receipt },
   ];
+
+  const loanTabs = [
+    { id: 'eligibility', label: 'Check Eligibility', icon: TrendingUp },
+    { id: 'apply', label: 'Apply for Loan', icon: FileText },
+    { id: 'status', label: 'Application Status', icon: Clock }
+  ];
+useEffect(() => {
+  const fetchApplications = async () => {
+    try {
+      const res = await fetch(`http://localhost:5000/api/loans?customerId=${customer.id}`);
+      const data = await res.json();
+      setApplications(data);
+    } catch (error) {
+      console.error("Failed to fetch loan applications:", error);
+    } finally {
+      setLoadingApplications(false);
+    }
+  };
+
+  fetchApplications();
+}, [customer.id]);
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -897,317 +906,151 @@ export default function CustomerPortal({
             </div>
           )}
 
-          {/* Loans Tab */}
           {activeTab === 'loans' && (
-            <div>
-              <div className="flex items-center gap-3 mb-6">
-                <PiggyBank className="h-6 w-6 text-orange-600" />
-                <h3 className="text-lg font-semibold">Loan Products</h3>
-              </div>
-
-              {/* Loan Eligibility Overview */}
-              <div className="bg-gradient-to-r from-purple-50 to-blue-50 rounded-lg p-6 mb-8 border border-purple-200">
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                  <div className="text-center">
-                    <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-2 ${
-                      customerCreditProfile.annualIncome >= 100000 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                    }`}>
-                      <DollarSign className="h-8 w-8" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700">Annual Income</p>
-                    <p className="text-xs text-gray-600">₹{(customerCreditProfile.annualIncome / 100000).toFixed(1)} lakhs</p>
-                    <p className={`text-xs font-medium ${customerCreditProfile.annualIncome >= 100000 ? 'text-green-600' : 'text-red-600'}`}>
-                      {customerCreditProfile.annualIncome >= 100000 ? '✅ Eligible' : '❌ Need ₹1L+'}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-2 ${
-                      customerCreditProfile.cibilScore >= 650 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                    }`}>
-                      <Calculator className="h-8 w-8" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700">CIBIL Score</p>
-                    <p className="text-xs text-gray-600">{customerCreditProfile.cibilScore}</p>
-                    <p className={`text-xs font-medium ${customerCreditProfile.cibilScore >= 650 ? 'text-green-600' : 'text-red-600'}`}>
-                      {customerCreditProfile.cibilScore >= 750 ? '✅ Excellent' : customerCreditProfile.cibilScore >= 650 ? '✅ Good' : '❌ Poor'}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-2 ${
-                      customerKYC?.verificationStatus === 'verified' ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                    }`}>
-                      <FileText className="h-8 w-8" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700">KYC Status</p>
-                    <p className="text-xs text-gray-600">{customerKYC?.verificationStatus || 'Not found'}</p>
-                    <p className={`text-xs font-medium ${customerKYC?.verificationStatus === 'verified' ? 'text-green-600' : 'text-red-600'}`}>
-                      {customerKYC?.verificationStatus === 'verified' ? '✅ Verified' : '❌ Required'}
-                    </p>
-                  </div>
-                  <div className="text-center">
-                    <div className={`w-16 h-16 mx-auto rounded-full flex items-center justify-center mb-2 ${
-                      validCustomerAccounts.length > 0 ? 'bg-green-100 text-green-600' : 'bg-red-100 text-red-600'
-                    }`}>
-                      <Building2 className="h-8 w-8" />
-                    </div>
-                    <p className="text-sm font-medium text-gray-700">Account Type</p>
-                    <p className="text-xs text-gray-600">{hasBusinessAccount ? 'Business' : 'Retail'}</p>
-                    <p className={`text-xs font-medium ${validCustomerAccounts.length > 0 ? 'text-green-600' : 'text-red-600'}`}>
-                      {validCustomerAccounts.length > 0 ? '✅ Active' : '❌ None'}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Eligible Loans */}
-              {eligibleLoans.length > 0 && (
+            <div className="min-h-screen bg-gray-50">
+              <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
                 <div className="mb-8">
-                  <h4 className="text-lg font-semibold text-green-800 mb-4 flex items-center gap-2">
-                    <CheckCircle className="h-5 w-5" />
-                    Eligible Loan Products ({eligibleLoans.length})
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {eligibleLoans.map(loan => {
-                      const Icon = loan.icon;
-                      return (
-                        <div key={loan.id} className="bg-green-50 border border-green-200 rounded-lg p-6 hover:shadow-md transition-all">
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                              <Icon className="h-6 w-6 text-green-600" />
-                            </div>
-                            <div>
-                              <h5 className="font-semibold text-green-800">{loan.name}</h5>
-                              <p className="text-sm text-green-600">{loan.description}</p>
-                            </div>
-                          </div>
-                          
-                          <div className="space-y-3 mb-4">
-                            <div className="flex justify-between items-center text-sm">
-                              <span className="text-gray-600">Interest Rate:</span>
-                              <span className="font-medium text-green-700">{loan.interestRate}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-sm">
-                              <span className="text-gray-600">Max Amount:</span>
-                              <span className="font-medium text-green-700">{loan.maxAmount}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-sm">
-                              <span className="text-gray-600">Tenure:</span>
-                              <span className="font-medium text-green-700">{loan.tenure}</span>
-                            </div>
-                          </div>
-
-                          <div className="mb-4">
-                            <p className="text-xs font-medium text-gray-700 mb-2">Key Features:</p>
-                            <div className="flex flex-wrap gap-1">
-                              {loan.features.slice(0, 2).map((feature, index) => (
-                                <span key={index} className="px-2 py-1 bg-green-100 text-green-700 text-xs rounded-full">
-                                  {feature}
-                                </span>
-                              ))}
-                            </div>
-                          </div>
-
-                          <button
-                            onClick={() => {
-                              setSelectedLoanType(loan.id);
-                              setLoanApplication({...loanApplication, loanTypeId: loan.id});
-                              setShowLoanApplication(true);
-                            }}
-                            className="w-full bg-green-600 text-white py-2 rounded-lg hover:bg-green-700 transition-colors font-medium"
-                          >
-                            Apply Now
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
+                  <h1 className="text-3xl font-bold text-gray-900">Welcome back, {customer.firstName} {customer.lastName}!</h1>
+                  <p className="text-gray-600 mt-2">Manage your loans and check eligibility for new ones</p>
                 </div>
-              )}
 
-              {/* Ineligible Loans */}
-              {ineligibleLoans.length > 0 && (
-                <div className="mb-8">
-                  <h4 className="text-lg font-semibold text-red-800 mb-4 flex items-center gap-2">
-                    <AlertCircle className="h-5 w-5" />
-                    Currently Ineligible Loan Products ({ineligibleLoans.length})
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    {ineligibleLoans.map(loan => {
-                      const Icon = loan.icon;
-                      const eligibility = checkLoanEligibility(loan);
-                      return (
-                        <div key={loan.id} className="bg-red-50 border border-red-200 rounded-lg p-6 opacity-75">
-                          <div className="flex items-center gap-3 mb-4">
-                            <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center">
-                              <Icon className="h-6 w-6 text-red-600" />
-                            </div>
-                            <div>
-                              <h5 className="font-semibold text-red-800">{loan.name}</h5>
-                              <p className="text-sm text-red-600">{loan.description}</p>
-                            </div>
-                          </div>
-                          
-                          <div className="space-y-3 mb-4">
-                            <div className="flex justify-between items-center text-sm">
-                              <span className="text-gray-600">Interest Rate:</span>
-                              <span className="font-medium text-red-700">{loan.interestRate}</span>
-                            </div>
-                            <div className="flex justify-between items-center text-sm">
-                              <span className="text-gray-600">Max Amount:</span>
-                              <span className="font-medium text-red-700">{loan.maxAmount}</span>
-                            </div>
-                          </div>
-
-                          <div className="mb-4">
-                            <p className="text-xs font-medium text-red-700 mb-2">Requirements not met:</p>
-                            <ul className="space-y-1">
-                              {eligibility.issues.map((issue, index) => (
-                                <li key={index} className="text-xs text-red-600 flex items-center gap-1">
-                                  <AlertCircle className="h-3 w-3" />
-                                  {issue}
-                                </li>
-                              ))}
-                            </ul>
-                          </div>
-
-                          <button
-                            disabled
-                            className="w-full bg-gray-400 text-white py-2 rounded-lg cursor-not-allowed font-medium"
-                          >
-                            Not Eligible
-                          </button>
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* No Loans Available */}
-              {eligibleLoans.length === 0 && ineligibleLoans.length === 0 && (
-                <div className="text-center py-12 text-gray-500">
-                  <PiggyBank className="h-16 w-16 mx-auto mb-4 text-gray-400" />
-                  <p className="text-lg font-medium mb-2">No loan products available</p>
-                  <p className="text-sm">Please check back later or contact our support team.</p>
-                </div>
-              )}
-
-              {/* Loan Application Modal */}
-              {showLoanApplication && selectedLoanType && (
-                <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-                  <div className="bg-white rounded-lg p-8 max-w-md w-full mx-4 max-h-screen overflow-y-auto">
-                    <div className="flex justify-between items-center mb-6">
-                      <h3 className="text-lg font-semibold">Loan Application</h3>
-                      <button
-                        onClick={() => setShowLoanApplication(false)}
-                        className="text-gray-400 hover:text-gray-600"
-                      >
-                        ✕
-                      </button>
+                {/* Quick Stats */}
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                  <div className="bg-white rounded-lg shadow-sm p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-blue-100 p-3 rounded-lg">
+                        <CreditCard className="h-6 w-6 text-blue-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Active Applications</h3>
+                        <p className="text-2xl font-bold text-blue-600">{applications.length}</p>
+                      </div>
                     </div>
+                  </div>
 
-                    <div className="mb-6">
-                      {(() => {
-                        const loan = loanTypes.find(l => l.id === selectedLoanType);
-                        const Icon = loan?.icon || PiggyBank;
+                  <div className="bg-white rounded-lg shadow-sm p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-green-100 p-3 rounded-lg">
+                        <TrendingUp className="h-6 w-6 text-green-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Credit Score</h3>
+                        <p className="text-2xl font-bold text-green-600">{customerCreditProfile.cibilScore}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white rounded-lg shadow-sm p-6">
+                    <div className="flex items-center gap-3">
+                      <div className="bg-purple-100 p-3 rounded-lg">
+                        <FileText className="h-6 w-6 text-purple-600" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">Approved Loans</h3>
+                        <p className="text-2xl font-bold text-purple-600">
+                          {applications.filter((app: any) => app.status === 'approved').length}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tab Navigation */}
+                <div className="bg-white rounded-lg shadow-sm mb-6">
+                  <div className="border-b border-gray-200">
+                    <nav className="flex space-x-8 px-6">
+                      {loanTabs.map((tab) => {
+                        const Icon = tab.icon;
                         return (
-                          <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-lg border border-blue-200">
-                            <Icon className="h-8 w-8 text-blue-600" />
-                            <div>
-                              <p className="font-semibold text-blue-800">{loan?.name}</p>
-                              <p className="text-sm text-blue-600">Interest: {loan?.interestRate}</p>
-                            </div>
-                          </div>
+                          <button
+                            key={tab.id}
+                            onClick={() => setActivesTab(tab.id as any)}
+                            className={`flex items-center gap-2 py-4 px-1 border-b-2 font-medium text-sm transition-colors duration-200 ${
+                              activesTab === tab.id
+                                ? 'border-blue-500 text-blue-600'
+                                : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
+                            }`}
+                          >
+                            <Icon className="h-4 w-4" />
+                            {tab.label}
+                          </button>
                         );
-                      })()}
-                    </div>
-
-                    <form onSubmit={handleLoanApplication} className="space-y-4">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Loan Amount *</label>
-                        <input
-                          type="number"
-                          required
-                          min="10000"
-                          step="1000"
-                          value={loanApplication.amount || ''}
-                          onChange={(e) => setLoanApplication({...loanApplication, amount: parseInt(e.target.value)})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          placeholder="Enter loan amount"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Purpose *</label>
-                        <input
-                          type="text"
-                          required
-                          value={loanApplication.purpose}
-                          onChange={(e) => setLoanApplication({...loanApplication, purpose: e.target.value})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          placeholder="Purpose of loan"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Employment Type *</label>
-                        <select
-                          required
-                          value={loanApplication.employmentType}
-                          onChange={(e) => setLoanApplication({...loanApplication, employmentType: e.target.value as 'salaried' | 'self_employed' | 'business'})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                        >
-                          <option value="salaried">Salaried</option>
-                          <option value="self_employed">Self Employed</option>
-                          <option value="business">Business Owner</option>
-                        </select>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Monthly Income *</label>
-                        <input
-                          type="number"
-                          required
-                          min="10000"
-                          step="1000"
-                          value={loanApplication.monthlyIncome || ''}
-                          onChange={(e) => setLoanApplication({...loanApplication, monthlyIncome: parseInt(e.target.value)})}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                          placeholder="Monthly income"
-                        />
-                      </div>
-
-                      <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                        <p className="text-sm text-yellow-800 font-medium mb-2">📋 Required Documents:</p>
-                        <ul className="text-xs text-yellow-700 space-y-1">
-                          <li>• Identity Proof (Aadhaar/PAN/Passport)</li>
-                          <li>• Address Proof (Utility Bill/Bank Statement)</li>
-                          <li>• Income Proof (Salary Slips/ITR/Bank Statements)</li>
-                          <li>• Bank Account Statements (Last 6 months)</li>
-                        </ul>
-                      </div>
-
-                      <div className="flex gap-3">
-                        <button
-                          type="button"
-                          onClick={() => setShowLoanApplication(false)}
-                          className="flex-1 border border-gray-300 text-gray-700 py-2 rounded-lg hover:bg-gray-50 transition-colors"
-                        >
-                          Cancel
-                        </button>
-                        <button
-                          type="submit"
-                          className="flex-1 bg-blue-600 text-white py-2 rounded-lg hover:bg-blue-700 transition-colors"
-                        >
-                          Submit Application
-                        </button>
-                      </div>
-                    </form>
+                      })}
+                    </nav>
                   </div>
                 </div>
-              )}
+
+                {/* Tab Content */}
+                <div className="min-h-96">
+                  {activesTab === 'eligibility' && <LoanEligibility  customer={customer}/>}
+                  {activesTab === 'apply' && <LoanApplicationForm customer={customer}/>}
+                  {activesTab === 'status' && (
+                    <div className="space-y-6">
+                      <div className="bg-gradient-to-r from-blue-600 to-blue-700 rounded-lg p-6 text-white">
+                        <h2 className="text-2xl font-bold mb-2">Application Status</h2>
+                        <p className="text-blue-100">Track the progress of your loan applications</p>
+                      </div>
+
+                      {applications.length === 0 ? (
+                        <div className="bg-white rounded-lg shadow-sm p-8 text-center">
+                          <Clock className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                          <h3 className="text-lg font-medium text-gray-900 mb-2">No Applications Found</h3>
+                          <p className="text-gray-600 mb-4">You haven't submitted any loan applications yet.</p>
+                          <button
+                            onClick={() => setActivesTab('apply')}
+                            className="bg-blue-600 text-white py-2 px-4 rounded-lg font-medium hover:bg-blue-700 transition-colors duration-200"
+                          >
+                            Apply for a Loan
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="space-y-4">
+                          {applications.map((app: any) => (
+                            <div key={app.id} className="bg-white rounded-lg shadow-sm p-6">
+                              <div className="flex items-center justify-between mb-4">
+                                <div>
+                                  <h3 className="text-lg font-semibold text-gray-900">{app.loanProductName}</h3>
+                                  <p className="text-sm text-gray-600">Applied on {new Date(app.appliedDate).toLocaleDateString()}</p>
+                                </div>
+                                <span className={`px-3 py-1 rounded-full text-sm font-medium capitalize ${getStatusColor(app.status)}`}>
+                                  {app.status.replace('_', ' ')}
+                                </span>
+                              </div>
+                              
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                                <div>
+                                  <span className="text-sm text-gray-600">Requested Amount</span>
+                                  <div className="text-lg font-semibold text-gray-900">
+                                    ₹{app.requestedAmount.toLocaleString()}
+                                  </div>
+                                </div>
+                                <div>
+                                  <span className="text-sm text-gray-600">Tenure</span>
+                                  <div className="text-lg font-semibold text-gray-900">{app.tenure} months</div>
+                                </div>
+                                <div>
+                                  <span className="text-sm text-gray-600">Application ID</span>
+                                  <div className="text-sm font-mono text-gray-700">{app.id.slice(0, 8)}...</div>
+                                </div>
+                              </div>
+
+                              {app.remarks && (
+                                <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+                                  <span className="text-sm font-medium text-gray-700">Remarks:</span>
+                                  <p className="text-sm text-gray-600 mt-1">{app.remarks}</p>
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
           )}
+
 
           {/* Statement */}
           {activeTab === 'statement' && (

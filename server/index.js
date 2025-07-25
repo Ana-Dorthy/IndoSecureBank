@@ -1034,13 +1034,18 @@ app.post('/api/loans', async (req, res) => {
 
 // Get all loan applications
 app.get('/api/loans', async (req, res) => {
+  const { customerId } = req.query;
+
   try {
-    const loans = await db.collection('loans').find({}).toArray();
-    res.json(loans.map(transformDocument));
+    const query = customerId ? { customerId } : {}; // filter if customerId provided
+    const loans = await db.collection('loan_applications').find(query).toArray();
+    res.status(200).json(loans);
   } catch (error) {
-    res.status(500).json({ error: error.message });
+    console.error("Error fetching loan applications:", error);
+    res.status(500).json({ error: 'Failed to fetch loans' });
   }
 });
+
 
 // Update loan status
 app.put('/api/loans/:id', async (req, res) => {
