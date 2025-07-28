@@ -31,7 +31,7 @@ export default function ManageBank({
     establishedDate: '',
     headOfficeAddress: '',
     contactEmail: '',
-    contactPhone: '',
+    // contactPhone: '',
     country: '',
     createdBy: '',
   });
@@ -52,7 +52,7 @@ export default function ManageBank({
       establishedDate: '',
       headOfficeAddress: '',
       contactEmail: '',
-      contactPhone: '',
+      // contactPhone: '',
       country: '',
       createdBy: '',
     });
@@ -62,8 +62,11 @@ export default function ManageBank({
     e.preventDefault();
     if (editingBank) {
       onUpdateBank(editingBank.id, formData);
+      console.log("Submitting bank:", formData);
     } else {
       onAddBank(formData);
+      console.log("Submitting bank:", formData);
+
     }
     resetForm();
   };
@@ -80,8 +83,8 @@ export default function ManageBank({
 
   const getInputProps = (key: string) => {
     switch (key) {
-      case 'contactPhone':
-        return { type: 'tel', placeholder: 'Ex: 9876543210', maxLength: 10 };
+      // case 'contactPhone':
+      //   return { type: 'tel', placeholder: 'Ex: 9876543210', maxLength: 10 };
       case 'ifscCode':
         return {
           type: 'text',
@@ -121,9 +124,9 @@ export default function ManageBank({
   const handleInputChange = (key: string, value: string) => {
     let updatedValue = value;
     switch (key) {
-      case 'contactPhone':
-        updatedValue = value.replace(/\D/g, '').slice(0, 10);
-        break;
+      // case 'contactPhone':
+      //   updatedValue = value.replace(/\D/g, '').slice(0, 10);
+      //   break;
       case 'bankCode':
         updatedValue = value.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
         break;

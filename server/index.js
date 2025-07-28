@@ -1,7 +1,8 @@
-//modified by prasanna-17/07/25
 import express from 'express';
 import cors from 'cors';
 import { MongoClient, ObjectId } from 'mongodb';
+import fs from 'fs';
+import { jwtVerify, importSPKI } from 'jose';
 
 const app = express();
 const PORT = 5000;
@@ -29,6 +30,32 @@ async function connectToMongoDB() {
   }
 }
 
+// Load RSA public key
+const publicKeyPem = fs.readFileSync('./server/keys/public.pem', 'utf-8');
+
+// RSA256 Token Verification Middleware
+async function verifyRSAToken(req, res, next) {
+  try {
+    const { token } = req.body;
+
+    if (!token) {
+      return res.status(400).json({ error: 'Token is missing' });
+    }
+
+    const publicKey = await importSPKI(publicKeyPem, 'RS256');
+    const { payload } = await jwtVerify(token, publicKey);
+    
+    // Replace req.body with decrypted data
+    req.body = payload.data;
+    
+    console.log('✅ Token verified and data decrypted successfully');
+    next();
+  } catch (err) {
+    console.error('❌ Token verification error:', err);
+    res.status(401).json({ error: 'Invalid or expired token' });
+  }
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
@@ -38,6 +65,7 @@ app.get('/api', (req, res) => {
   res.json({
     message: 'Banking Management System API',
     version: '1.0.0',
+    security: 'RSA256 Token Required for POST APIs',
     endpoints: {
       banks: '/api/banks',
       branches: '/api/branches', 
@@ -55,6 +83,7 @@ app.get('/api', (req, res) => {
     }
   });
 });
+
 //check
 app.post('/check', async (req, res) => {
   try {
@@ -253,7 +282,6 @@ const transformDocument = (doc) => {
   return doc;
 };
 
-// Banks API Routes
 app.get('/api/banks', async (req, res) => {
   try {
     const banks = await db.collection('banks').find({}).toArray();
@@ -263,7 +291,7 @@ app.get('/api/banks', async (req, res) => {
   }
 });
 
-app.post('/api/banks', async (req, res) => {
+app.post('/api/banks', verifyRSAToken, async (req, res) => {
   try {
     const bankData = {
       ...req.body,
@@ -321,7 +349,7 @@ app.get('/api/branches', async (req, res) => {
   }
 });
 
-app.post('/api/branches', async (req, res) => {
+app.post('/api/branches', verifyRSAToken, async (req, res) => {
   try {
     const branchData = {
       ...req.body,
@@ -378,7 +406,7 @@ app.get('/api/customers', async (req, res) => {
   }
 });
 
-app.post('/api/customers', async (req, res) => {
+app.post('/api/customers', verifyRSAToken, async (req, res) => {
   try {
     const customerData = {
       ...req.body,
@@ -424,6 +452,7 @@ app.delete('/api/customers/:id', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
 // KYC API Routes
 app.get('/api/kyc', async (req, res) => {
   try {
@@ -434,7 +463,7 @@ app.get('/api/kyc', async (req, res) => {
   }
 });
 
-app.post('/api/kyc', async (req, res) => {
+app.post('/api/kyc', verifyRSAToken, async (req, res) => {
   try {
     const kycData = {
       ...req.body,
@@ -487,7 +516,7 @@ app.get('/api/employees', async (req, res) => {
   }
 });
 
-app.post('/api/employees', async (req, res) => {
+app.post('/api/employees', verifyRSAToken, async (req, res) => {
   try {
     const employeeData = {
       ...req.body,
@@ -540,7 +569,7 @@ app.get('/api/accounts', async (req, res) => {
   }
 });
 
-app.post('/api/accounts', async (req, res) => {
+app.post('/api/accounts', verifyRSAToken, async (req, res) => {
   try {
     const accountData = {
       ...req.body,
@@ -597,7 +626,7 @@ app.get('/api/transactions', async (req, res) => {
   }
 });
 
-app.post('/api/transactions', async (req, res) => {
+app.post('/api/transactions', verifyRSAToken, async (req, res) => {
   try {
     const transactionData = {
       ...req.body,
@@ -640,8 +669,8 @@ app.delete('/api/transactions/:id', async (req, res) => {
   }
 });
 
-// Check Withdrawal Eligibility API
-app.post('/api/check-withdraw-eligibility', async (req, res) => {
+// Check Withdrawal Eligibility API - with RSA decryption
+app.post('/api/check-withdraw-eligibility', verifyRSAToken, async (req, res) => {
   try {
     const { customerId, amount } = req.body;
     
@@ -677,8 +706,8 @@ app.post('/api/check-withdraw-eligibility', async (req, res) => {
   }
 });
 
-// Generate Report API
-app.post('/api/generate-report', async (req, res) => {
+// Generate Report API - with RSA decryption
+app.post('/api/generate-report', verifyRSAToken, async (req, res) => {
   try {
     const { reportType, period, filters } = req.body;
     

@@ -69,7 +69,7 @@ export default function CustomerPortal({
   onTransfer,
   onCheckWithdrawEligibility
 }: CustomerPortalProps) {
-  const [activeTab, setActiveTab] = useState<'overview' | 'credit-debit' | 'transfer' | 'statement' | 'loans'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'credit-debit' | 'transfer' | 'statement' | 'loans '| 'account-statement'>('overview');
   const [selectedAccount, setSelectedAccount] = useState<string>('');
   const [amount, setAmount] = useState<string>('');
   const [description, setDescription] = useState<string>('');
@@ -84,6 +84,13 @@ const [loadingApplications, setLoadingApplications] = useState(true);
   //   .filter((app: any) => app.customerId === customer.id);
 
   // Mock customer credit profile - in real app this would come from credit bureau
+  const [statementForm, setStatementForm] = useState({
+  customer_id: '',
+  from_date: '',
+  to_date: ''
+});
+const [pdfBase64, setPdfBase64] = useState<string | null>(null);
+
   const customerCreditProfile = {
     cibilScore: 750, // Mock CIBIL score
     annualIncome: 600000, // Mock annual income (6 lakhs)
@@ -1123,6 +1130,76 @@ useEffect(() => {
               )}
             </div>
           )}
+          {activeTab === 'account-statement' && (
+  <div className="space-y-6">
+    <div className="bg-white rounded-lg shadow-sm p-6">
+      <h2 className="text-xl font-semibold text-gray-900 mb-4">Fetch Bank Statement</h2>
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <label className="block text-sm font-medium text-gray-700">Customer ID</label>
+          <input
+            type="text"
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+            value={statementForm.customer_id}
+            onChange={(e) => setStatementForm({ ...statementForm, customer_id: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">From Date</label>
+          <input
+            type="date"
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+            value={statementForm.from_date}
+            onChange={(e) => setStatementForm({ ...statementForm, from_date: e.target.value })}
+          />
+        </div>
+        <div>
+          <label className="block text-sm font-medium text-gray-700">To Date</label>
+          <input
+            type="date"
+            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm"
+            value={statementForm.to_date}
+            onChange={(e) => setStatementForm({ ...statementForm, to_date: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <button
+        className="mt-4 bg-blue-600 text-white px-4 py-2 rounded-md"
+        onClick={async () => {
+          try {
+            const response = await fetch('http://127.0.0.1:8000/api/friend-bank-statement', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify([statementForm])
+            });
+
+            const data = await response.json();
+            setPdfBase64(data.pdf_encrypted || null);
+          } catch (err) {
+            alert('Failed to fetch bank statement');
+          }
+        }}
+      >
+        Get Statement
+      </button>
+    </div>
+
+    {pdfBase64 && (
+      <div className="bg-white rounded-lg shadow-sm p-6">
+        <h3 className="text-lg font-medium text-gray-900 mb-2">Preview Statement</h3>
+        <iframe
+          src={`data:application/pdf;base64,${pdfBase64}`}
+          width="100%"
+          height="600px"
+          title="Bank Statement"
+        />
+      </div>
+    )}
+  </div>
+)}
+
         </div>
       </div>
     </div>

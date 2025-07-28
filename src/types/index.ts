@@ -5,12 +5,13 @@ export interface Bank {
   ifscCode: ReactNode;
   id: string;
   name: string;
+  bankName: string;
   code: string;
   address: string;
   phone: string;
   email: string;
   establishedDate: string;
-  createdAt: string;
+  createdBy: string; 
   headOfficeAddress: string;
 }
 
